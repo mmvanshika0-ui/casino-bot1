@@ -1,0 +1,26 @@
+{
+  "name": "casino-bot",
+  "version": "2.0.0",
+  "description": "Discord Casino Bot with provably fair games, jackpot, referrals, canvas profiles",
+  "main": "src/index.js",
+  "scripts": {
+    "start":   "node src/index.js",
+    "dev":     "nodemon src/index.js",
+    "db:push": "npx prisma db push",
+    "db:gen":  "npx prisma generate",
+    "db:studio":"npx prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.0.0",
+    "canvas":         "^2.11.2",
+    "discord.js":     "^14.0.0",
+    "dotenv":         "^16.0.0",
+    "express":        "^4.18.0",
+    "qrcode":         "^1.5.3",
+    "uuid":           "^9.0.0"
+  },
+  "devDependencies": {
+    "nodemon":        "^3.0.0",
+    "prisma":         "^5.0.0"
+  }
+}

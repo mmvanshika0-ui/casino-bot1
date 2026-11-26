@@ -1,0 +1,380 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════
+// EXISTING MODELS (unchanged fields preserved)
+// ═══════════════════════════════════════════════
+
+model User {
+  id            String   @id @default(uuid())
+  discordId     String   @unique
+  username      String
+  balance       Float    @default(5000)
+  vaultBalance  Float    @default(0)
+  frozen        Boolean  @default(false)
+  xp            Int      @default(0)
+  level         Int      @default(1)
+  gamesPlayed   Int      @default(0)
+  gamesWon      Int      @default(0)
+  gamesLost     Int      @default(0)
+  totalWagered  Float    @default(0)
+  totalWon      Float    @default(0)
+  totalLost     Float    @default(0)
+  favoriteGame  String?
+  lastDaily     DateTime?
+  // NEW: interest tracking
+  lastInterestClaim DateTime?
+  // NEW: rank system
+  rankId            String    @default("bronze")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transactions      Transaction[]
+  gameSessions      GameSession[]
+  achievements      UserAchievement[]
+  cooldowns         Cooldown[]
+  sentDuels         Duel[]             @relation("challenger")
+  receivedDuels     Duel[]             @relation("challenged")
+  deposits          Deposit[]
+  withdrawals       Withdrawal[]
+  adminLogs         AdminLog[]
+  vaultTransactions VaultTransaction[]
+  // NEW relations
+  seedPairs         SeedPair[]
+  userItems         UserItem[]
+  referralUseAsRef  ReferralUse[]       @relation("referrer")
+  referralUseAsNew  ReferralUse?        @relation("referred")
+  fraudFlag         FraudFlag?
+  wagerRequirement  WagerRequirement?
+
+  @@index([discordId])
+  @@index([balance])
+  @@index([level])
+  @@index([xp])
+  @@index([totalWagered])
+  @@index([rankId])
+}
+
+model Transaction {
+  id          String   @id @default(uuid())
+  userId      String
+  type        String   // win, loss, tip_sent, tip_received, daily, admin, vault_deposit,
+                       // vault_withdraw, jackpot_win, referral_commission, rain_sent,
+                       // rain_received, shop_purchase, interest
+  amount      Float
+  game        String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model VaultTransaction {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // deposit, withdraw
+  amount    Float
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model GameSession {
+  id         String   @id @default(uuid())
+  userId     String
+  game       String
+  bet        Float
+  result     String   // win, loss, push
+  payout     Float
+  multiplier Float?
+  gameData   String?  // JSON string
+  // NEW: provably fair reference
+  serverSeedHash String?
+  clientSeed     String?
+  nonce          Int?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([game])
+  @@index([createdAt])
+}
+
+model Achievement {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  name        String
+  description String
+  icon        String
+  xpReward    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  users UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(uuid())
+  userId        String
+  achievementId String
+  unlockedAt    DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id])
+  achievement Achievement @relation(fields: [achievementId], references: [id])
+
+  @@unique([userId, achievementId])
+}
+
+model Cooldown {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, type])
+  @@index([userId])
+}
+
+model Duel {
+  id           String    @id @default(uuid())
+  challengerId String
+  challengedId String
+  amount       Float
+  status       String    @default("pending")
+  winnerId     String?
+  game         String?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  challenger User @relation("challenger", fields: [challengerId], references: [id])
+  challenged User @relation("challenged", fields: [challengedId], references: [id])
+
+  @@index([challengerId])
+  @@index([challengedId])
+}
+
+model Deposit {
+  id              String   @id @default(uuid())
+  userId          String
+  currency        String
+  network         String
+  address         String
+  amount          Float?
+  amountCrypto    Float?
+  txHash          String?
+  status          String   @default("pending")
+  apironeId       String?  @unique
+  confirmations   Int      @default(0)
+  expiresAt       DateTime
+  // NEW: first deposit flag
+  isFirstDeposit  Boolean  @default(false)
+  bonusGranted    Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([apironeId])
+}
+
+model Withdrawal {
+  id           String   @id @default(uuid())
+  userId       String
+  currency     String
+  network      String
+  address      String
+  amount       Float
+  amountCrypto Float?
+  txHash       String?
+  status       String   @default("pending")
+  apironeId    String?  @unique
+  reason       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+model HouseBalance {
+  id        String   @id @default(uuid())
+  currency  String   @unique
+  balance   Float    @default(0)
+  totalIn   Float    @default(0)
+  totalOut  Float    @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model AdminLog {
+  id          String   @id @default(uuid())
+  adminId     String
+  targetId    String?
+  action      String
+  description String?
+  amount      Float?
+  createdAt   DateTime @default(now())
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([createdAt])
+}
+
+model GameLevel {
+  id     String @id @default(uuid())
+  userId String
+  game   String
+  level  Int    @default(1)
+  xp     Int    @default(0)
+
+  @@unique([userId, game])
+  @@index([userId])
+}
+
+// ═══════════════════════════════════════════════
+// NEW MODELS
+// ═══════════════════════════════════════════════
+
+// ── Provably Fair ──────────────────────────────
+
+model SeedPair {
+  id             String    @id @default(uuid())
+  discordId      String
+  serverSeed     String
+  serverSeedHash String
+  clientSeed     String
+  nonce          Int       @default(0)
+  active         Boolean   @default(true)
+  revealedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  user User @relation(fields: [discordId], references: [discordId])
+
+  @@index([discordId])
+  @@index([discordId, active])
+}
+
+// ── Jackpot Pool ───────────────────────────────
+
+model JackpotPool {
+  id        String   @id @default("global")
+  amount    Float    @default(10000)
+  updatedAt DateTime @updatedAt
+}
+
+model JackpotHistory {
+  id        String   @id @default(uuid())
+  discordId String
+  game      String
+  trigger   String
+  amount    Float
+  createdAt DateTime @default(now())
+
+  @@index([discordId])
+  @@index([createdAt])
+}
+
+// ── Referral System ────────────────────────────
+
+model Referral {
+  id          String   @id @default(uuid())
+  referrerId  String   @unique
+  code        String   @unique
+  createdAt   DateTime @default(now())
+
+  @@index([code])
+}
+
+model ReferralUse {
+  id              String   @id @default(uuid())
+  referrerId      String
+  referredId      String   @unique
+  code            String
+  totalCommission Float    @default(0)
+  totalDeposits   Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  referrer User @relation("referrer", fields: [referrerId], references: [discordId])
+  referred User @relation("referred", fields: [referredId], references: [discordId])
+
+  @@index([referrerId])
+}
+
+// ── Shop System ────────────────────────────────
+
+model ShopItem {
+  id          String   @id @default(uuid())
+  itemId      String   @unique
+  name        String
+  description String
+  type        String   // title, badge, effect, role
+  price       Float
+  value       String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  userItems UserItem[]
+}
+
+model UserItem {
+  id          String   @id @default(uuid())
+  discordId   String
+  itemId      String
+  type        String
+  value       String
+  equipped    Boolean  @default(false)
+  purchasedAt DateTime @default(now())
+
+  user     User     @relation(fields: [discordId], references: [discordId])
+  shopItem ShopItem @relation(fields: [itemId], references: [itemId])
+
+  @@index([discordId])
+  @@index([discordId, type])
+}
+
+// ── Wager Requirement ──────────────────────────
+
+model WagerRequirement {
+  id        String   @id @default(uuid())
+  discordId String   @unique
+  required  Float
+  wagered   Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [discordId], references: [discordId])
+}
+
+// ── Fraud Detection ────────────────────────────
+
+model FraudFlag {
+  id          String   @id @default(uuid())
+  discordId   String   @unique
+  reason      String
+  count       Int      @default(1)
+  resolved    Boolean  @default(false)
+  lastFlagged DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [discordId], references: [discordId])
+
+  @@index([resolved])
+}

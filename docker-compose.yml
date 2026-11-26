@@ -1,0 +1,14 @@
+version: '3.9'
+
+services:
+  casino-bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - DATABASE_URL=file:./data/casino.db
